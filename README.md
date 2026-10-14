@@ -103,7 +103,7 @@ Prices and bounds are **USD asking prices**, excluding shipping, fees, and tax. 
 
 Supported filters: price bounds, `new`/`used`/`any` condition, and numeric category IDs. Sorts: relevance, newest, price ascending, price descending. Brand, department, size, color, granular condition, and popularity filters return errors; include descriptive terms in the query and verify the details instead. Location/radius are Facebook-only and do not limit SidelineSwap inventory.
 
-Pagination uses result offsets (0–5000) and returns up to 500 listings, with a maximum of 10 requests per call. Incomplete results, later-page failures, skipped malformed rows, and truncated counts are disclosed in the result note; do not treat a bounded search as exhaustive. Offsets follow the storefront order; inventory may change between calls.
+Pagination uses result offsets (0–5000) and returns up to 500 listings, with a maximum of 10 requests and a 45-second overall deadline per call. Incomplete results, later-page failures, skipped malformed rows, and truncated counts are disclosed in the result note; do not treat a bounded search as exhaustive. Offsets follow the storefront order; inventory may change between calls.
 
 ### Choosing Marketplaces
 

@@ -79,11 +79,12 @@ export class SidelineSwapMarketplace extends BaseMarketplace {
   readonly displayName = 'SidelineSwap';
   readonly requiresAuth = false;
 
-  private async request(path: string, params?: URLSearchParams): Promise<unknown> {
+  private async request(path: string, params?: URLSearchParams, deadline?: AbortSignal): Promise<unknown> {
     const url = new URL(path, API);
     if (params) url.search = params.toString();
     const response = await fetch(url, {
-      headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(20_000),
+      headers: { Accept: 'application/json' },
+      signal: deadline ? AbortSignal.any([deadline, AbortSignal.timeout(20_000)]) : AbortSignal.timeout(20_000),
     });
     if (!response.ok) throw new Error(`SidelineSwap HTTP ${response.status}`);
     return response.json();
@@ -130,6 +131,7 @@ export class SidelineSwapMarketplace extends BaseMarketplace {
       if (params.category) query.append('category[]', params.category);
 
       const firstPage = Math.floor(offset / PAGE_SIZE) + 1;
+      const deadline = AbortSignal.timeout(45_000);
       const seen = new Set<string>();
       const returned = new Set<string>();
       let hasNext = false;
@@ -138,7 +140,7 @@ export class SidelineSwapMarketplace extends BaseMarketplace {
       for (; pages < MAX_PAGES && listings.length < limit; pages++) {
         const page = firstPage + pages;
         query.set('page', String(page));
-        const payload = record(await this.request('/v2/facet_items', query));
+        const payload = record(await this.request('/v2/facet_items', query, deadline));
         const paging = record(record(payload?.meta)?.paging);
         if (!Array.isArray(payload?.data) || !paging || integer(paging.page) !== page || integer(paging.page_size) !== PAGE_SIZE || typeof paging.has_next_page !== 'boolean') {
           throw new Error('Unexpected SidelineSwap search response or pagination; storefront API may have changed');

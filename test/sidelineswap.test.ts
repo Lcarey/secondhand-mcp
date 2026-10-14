@@ -65,6 +65,25 @@ describe('SidelineSwap search', () => {
     expect(result.note).toContain('Incomplete SidelineSwap search');
     expect(result.note).toContain('429');
   });
+  it('enforces a shared overall deadline and reports partial coverage on abort', async () => {
+    const deadline = new AbortController();
+    const timeout = vi.spyOn(AbortSignal, 'timeout').mockImplementation(ms =>
+      ms === 45_000 ? deadline.signal : new AbortController().signal);
+    try {
+      fetchMock.mockResolvedValueOnce(response(page([sample()], 1, true)))
+        .mockImplementationOnce((_url, options) => {
+          deadline.abort(new DOMException('Search deadline exceeded', 'TimeoutError'));
+          expect(options.signal.aborted).toBe(true);
+          return Promise.reject(options.signal.reason);
+        });
+      const result = await mp.search({ query: 'mask', limit: 3 });
+      expect(timeout).toHaveBeenCalledWith(45_000);
+      expect(result.listings).toHaveLength(1);
+      expect(result.note).toContain('Incomplete SidelineSwap search');
+      expect(result.note).toContain('Search deadline exceeded');
+      expect(fetchMock.mock.calls[0][1].signal.aborted).toBe(true);
+    } finally { timeout.mockRestore(); }
+  });
   it('detects a repeated page rather than looping or claiming completeness', async () => {
     fetchMock.mockResolvedValueOnce(response(page([sample()], 1, true))).mockResolvedValueOnce(response(page([sample()], 2, true)));
     const result = await mp.search({ query: 'mask', limit: 3 });
