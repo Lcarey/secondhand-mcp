@@ -24,6 +24,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ matrix.commit }}
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -31,4 +32,4 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: npm test
-      - run: git diff --check HEAD~1 HEAD
+      - run: git diff --check d7385b59d7e3691ab8609425330134b956314661...HEAD
