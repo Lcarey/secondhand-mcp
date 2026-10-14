@@ -62,7 +62,7 @@ export const tools: AnnotatedTool[] = [
         },
         showSold: {
           type: 'boolean',
-          description: 'Include sold/unavailable items in results (default: false)',
+          description: 'Include sold/unavailable items in results (Facebook); SidelineSwap includes available and sold items, marking sold search titles with [Sold] (default: false)',
           default: false
         },
         includeImages: {

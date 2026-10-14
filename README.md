@@ -117,7 +117,7 @@ By default all marketplaces are enabled. To limit which are active, set the `MAR
 }
 ```
 
-Valid values: `facebook`, `ebay`, `depop`, `poshmark`
+Valid values: `facebook`, `ebay`, `depop`, `poshmark`, `sidelineswap`
 
 ### eBay API Keys
 
@@ -198,7 +198,7 @@ Get full details for a specific listing using an ID from search results.
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
 | `listingId` | Yes | | Listing ID from search results |
-| `marketplace` | No | `facebook` | `facebook`, `ebay`, `depop`, or `poshmark` |
+| `marketplace` | No | `facebook` | `facebook`, `ebay`, `depop`, `poshmark`, or `sidelineswap` |
 
 **Data returned per marketplace:**
 
