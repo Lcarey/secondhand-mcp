@@ -129,6 +129,7 @@ describe('SidelineSwap details', () => {
     expect(String(fetchMock.mock.calls[0][0])).toBe('https://api.sidelineswap.com/v1/items/12549997');
     expect(result.images).toHaveLength(3);
     expect(result.description).toContain('Availability: sold');
+    expect(result.description).toContain(`Current asking price: USD ${Number(fixture('details').data.price).toFixed(2)}`);
     expect(result.description).toContain('Size: Medium');
     expect(result.description).toContain('Age Group: Senior');
     expect(result.description).toContain('Model: Bauer 950 Goalie Mask');
@@ -153,18 +154,27 @@ describe('SidelineSwap details', () => {
     fetchMock.mockResolvedValue(response({ data: { id: 12, name: 'Bat', state: 'available', details: [{ name: 'Length', values: [{ name: '32 inches' }] }, { name: 'Missing', values: [{}] }, null], model: { name: 'CAT9' } } }));
     const result = await mp.getListingDetails('12');
     expect(result.unavailable).toEqual(['description', 'photos']);
-    expect(result.description).toBe('Availability: available\nLength: 32 inches\nModel: CAT9');
+    expect(result.description).toBe('Current asking price: not listed\nAvailability: available\nLength: 32 inches\nModel: CAT9');
   });
   it('sanitizes malformed photo URLs and deduplicates the primary image', async () => {
     fetchMock.mockResolvedValue(response({ data: { id: 12, name: 'Bat', price: '99.5', url: 'javascript:bad', images: [null, {}, { large_url: 'javascript:bad' }, { edge_url: 'https://images.sidelineswap.com/a' }, { small_url: 'https://images.sidelineswap.com/b' }, { thumb_url: 'https://images.sidelineswap.com/c' }, { large_url: 'invalid' }], primary_image: { large_url: 'https://images.sidelineswap.com/a' } } }));
     const result = await mp.getListingDetails('12');
     expect(result.images).toEqual(['https://images.sidelineswap.com/a', 'https://images.sidelineswap.com/b', 'https://images.sidelineswap.com/c']);
-    expect(result.description).toBeUndefined();
+    expect(result.description).toBe('Current asking price: USD 99.50 (shipping, fees and tax excluded)');
     expect(result.url).toBe('https://sidelineswap.com/gear/12');
   });
   it('propagates removal/block errors instead of returning fictional details', async () => {
     fetchMock.mockResolvedValue(new Response('', { status: 404 }));
     await expect(mp.getListingDetails('12')).rejects.toThrow('HTTP 404');
+  });
+  it('rechecks the current asking price when a listing changes after search', async () => {
+    fetchMock.mockResolvedValueOnce(response(page([sample()])));
+    const result = await mp.search({ query: 'mask' });
+    const before = result.listings[0].priceNumeric!;
+    fetchMock.mockResolvedValueOnce(response({ data: { ...sample(), price: before + 50 } }));
+    const details = await mp.getListingDetails(result.listings[0].id);
+    expect(details.description).toContain(`USD ${(before + 50).toFixed(2)}`);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });
 

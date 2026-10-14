@@ -213,6 +213,10 @@ export class SidelineSwapMarketplace extends BaseMarketplace {
     const images = photos(item);
     const description = text(item.description);
     const fields = attributes(item);
+    const currentPrice = amount(item.price);
+    fields.unshift(currentPrice === undefined
+      ? 'Current asking price: not listed'
+      : `Current asking price: USD ${currentPrice.toFixed(2)} (shipping, fees and tax excluded)`);
     return {
       id, url: itemUrl(item.url, id), images, seller: text(record(item.seller)?.username),
       description: [...fields, ...(description ? [`\nSeller description:\n${description}`] : [])].join('\n') || undefined,
