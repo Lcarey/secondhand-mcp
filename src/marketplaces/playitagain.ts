@@ -58,9 +58,9 @@ function productUrl(value: string): URL {
   return url;
 }
 
-async function fetchPage(url: URL): Promise<string> {
+async function fetchPage(url: URL, deadline?: AbortSignal): Promise<string> {
   const response = await fetch(url, {
-    signal: AbortSignal.timeout(20_000), redirect: 'error',
+    signal: deadline ? AbortSignal.any([deadline, AbortSignal.timeout(20_000)]) : AbortSignal.timeout(20_000), redirect: 'error',
     headers: { Accept: 'text/html', 'User-Agent': 'secondhand-mcp (public inventory search)' },
   });
   if (!response.ok) throw new Error(`Storefront HTTP ${response.status}`);
@@ -121,13 +121,14 @@ export class PlayItAgainMarketplace extends BaseMarketplace {
       for (const bound of [params.minPrice, params.maxPrice]) if (bound != null && (!Number.isFinite(bound) || bound < 0)) throw new Error('Price bounds must be nonnegative finite numbers');
       if (params.minPrice != null && params.maxPrice != null && params.minPrice > params.maxPrice) throw new Error('minPrice must not exceed maxPrice');
       if (limit === 0) return { marketplace: this.name, success: true, listings: [] };
+      const deadline = AbortSignal.timeout(45_000);
       const listings: Listing[] = [], seen = new Set<number>();
       let pages = 0, total: number | undefined, exhausted = false;
       for (let page = 1; page <= MAX_PAGES; page++) {
         const url = new URL('/search.php', BASE);
         url.searchParams.set('search_query', params.query); url.searchParams.set('section', 'product');
         url.searchParams.set('page', String(page)); url.searchParams.set('sort', SORT[params.sort ?? 'relevance']);
-        const html = await fetchPage(url), data = context(html);
+        const html = await fetchPage(url, deadline), data = context(html);
         if (data.template !== 'pages/search' || !Array.isArray(data.searchProducts)
           || !Number.isInteger(data.searchProductsPerPage) || data.searchProductsPerPage! < 1) throw new Error('Invalid search page data');
         const count = data.searchResultsCount?.match(/^([\d,]+) results? for /)?.[1];

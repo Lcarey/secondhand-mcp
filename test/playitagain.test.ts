@@ -113,6 +113,25 @@ describe('Play It Again Sports public search', () => {
     expect(await marketplace.search({query:'test'})).toMatchObject({success:false,listings:[],error:expect.any(String)});
   });
 
+  it('shares an overall deadline across pages and reports aborts instead of claiming partial success',async()=>{
+    const overall=new AbortController();
+    const timeout=AbortSignal.timeout.bind(AbortSignal);
+    const timeoutSpy=vi.spyOn(AbortSignal,'timeout').mockImplementation(ms=>ms===45_000 ? overall.signal : timeout(ms));
+    const page=document({template:'pages/search',searchProducts:[first],searchProductsPerPage:1,searchResultsCount:"3 results for 'test'"});
+    const fetch=vi.fn().mockResolvedValueOnce(new Response(page)).mockImplementationOnce((_url,options)=>new Promise((_resolve,reject)=>{
+      options.signal.addEventListener('abort',()=>reject(options.signal.reason),{once:true});
+    }));
+    vi.stubGlobal('fetch',fetch);
+    try {
+      const pending=marketplace.search({query:'test'});
+      await vi.waitFor(()=>expect(fetch).toHaveBeenCalledTimes(2));
+      overall.abort(new DOMException('Overall search deadline exceeded','TimeoutError'));
+      const result=await pending;
+      expect(result).toMatchObject({success:false,listings:[],error:expect.stringContaining('Overall search deadline exceeded')});
+      expect(timeoutSpy).toHaveBeenCalledWith(45_000);
+    }finally {timeoutSpy.mockRestore();}
+  });
+
   it('reports HTTP and transport failures, and health checks return false', async () => {
     vi.stubGlobal('fetch',vi.fn().mockResolvedValue(new Response('blocked',{status:403})));
     expect((await marketplace.search({query:'test'})).error).toContain('HTTP 403');
