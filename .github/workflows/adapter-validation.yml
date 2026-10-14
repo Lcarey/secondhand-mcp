@@ -1,0 +1,34 @@
+name: Validate sporting marketplace PR commits
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: ${{ matrix.source }} / Node 22
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - source: SidelineSwap
+            commit: a64d43b99b9ad3de9854efa58d8a12f83c10b1d6
+          - source: Play It Again Sports
+            commit: e6b4464820600dc75575a669a4e47d2d75feb26c
+          - source: Geartrade
+            commit: 80584558c8e432804ea8131b21610cc953ac1a92
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ matrix.commit }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npm test
+      - run: git diff --check HEAD~1 HEAD
