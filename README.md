@@ -3,7 +3,7 @@
 
 # Secondhand MCP
 
-A [Model Context Protocol](https://modelcontextprotocol.io) (MCP) server that lets AI assistants search secondhand marketplaces. Search Facebook Marketplace, eBay, Depop, and Poshmark for used and secondhand items — filter by price, category, condition, size, and color, then get full listing details with photos, descriptions, and seller info.
+A [Model Context Protocol](https://modelcontextprotocol.io) (MCP) server that lets AI assistants search secondhand marketplaces. Search Facebook Marketplace, eBay, Depop, Poshmark, SidelineSwap, Play It Again Sports, and Geartrade for used and secondhand items — filter by price, category, condition, size, and color, then get full listing details with photos, descriptions, and seller info.
 
 Works with Claude Desktop, Claude Code, Cursor, and other clients that run MCP servers locally.
 
@@ -18,7 +18,7 @@ Works with Claude Desktop, Claude Code, Cursor, and other clients that run MCP s
 | ChatGPT, Claude, and other assistants | — | ✅ |
 | Searching from your phone | — | ✅ |
 | Chrome running in the background | needed | not needed |
-| Price | free, forever | free tier, then $4.99 |
+| Price | free, forever | free tier, then $4.99 | USD/CAD; starting price if options |
 
 ## Supported Marketplaces
 
@@ -28,6 +28,30 @@ Works with Claude Desktop, Claude Code, Cursor, and other clients that run MCP s
 | eBay | Yes (API keys) | Official Browse API |
 | Depop | No | Requires Chrome installed |
 | Poshmark | No | Requires Chrome installed |
+| SidelineSwap | No | Public storefront JSON; no browser required |
+| Play It Again Sports | No | Public online sporting-goods inventory; no Chrome required |
+
+### Play It Again Sports
+
+Use `marketplace: "playitagain"` for public online inventory from participating stores. No account, API key, or browser is required. Search results include both new and used equipment; use `condition: "used"` to restrict to listings explicitly marked used.
+
+```json
+{
+  "marketplace": "playitagain",
+  "query": "bauer goalie mask",
+  "condition": "used",
+  "maxPrice": 500,
+  "limit": 20
+}
+```
+
+Search follows actual storefront pages (at most ten pages per call, with a 45-second overall deadline and 20-second per-request timeout). `limit` and `offset` range from 0 to 120; offset counts matched listings after filtering. Overlapping page listings are deduplicated. Coverage notes report pages inspected and remaining inventory; `totalFound` is the site's unfiltered query count, not a count of verified matches. Filters can leave fewer than `limit` results when the page budget is reached.
+
+- Price bounds are **USD-only** and exclude Canadian-store listings. Without bounds, both USD and CAD listings are returned with explicit currency prefixes. The site initially labels some Canadian products USD in its server HTML, then switches currency in the browser; this adapter uses the product's `Country` custom field for store-native USD/CAD. No currency conversion is performed. Prices exclude tax and shipping. Listings with selectable options show starting prices and require checking the desired option and final price. Price sorting uses nominal amounts rather than exchange rates.
+- Supported sorts: relevance, newest, price ascending, and price descending. Condition filters: new, used, or any. Brand, size, color, and category filters match structured fields case-insensitively; use site field values (for example `Size: M`). The equipment brand is `Product Brand`; the site's `brand` field identifies the store. Missing fields do not qualify for a requested filter.
+- Location does not restrict the search geographically. Radius, department, sold-inventory, popularity sorting, and finer condition grades are unsupported and produce explicit errors.
+- Pass the returned product-path **ID** (such as `/locations/leominster-ma/product/S000152950/Bauer-SUPREME-Jr`) or its full product URL to `get_listing_details`. Numeric storefront IDs alone are insufficient. Details include SKU, available custom fields, store, full-size gallery images, and fulfillment options only when explicitly listed. Out-of-stock, removed, blocked, or malformed product pages return errors.
+- Stock is checked at detail-fetch time, not guaranteed by a search result. Online inventory does not cover every store's physical stock. Listed dates and age-group fields are not evidence of equipment manufacture dates. Store-specific shipping and cross-border eligibility still need confirmation.
 
 ## Setup
 
@@ -83,6 +107,27 @@ The browser runs invisibly in the background and only launches when you actually
 
 ## Configuration
 
+### SidelineSwap
+
+Enable with `MARKETPLACES=sidelineswap`, or include it in a comma-separated list. No API key, login, browser, or proxy is required. Search uses the public storefront's JSON endpoints, which are undocumented and may change or block access. Failures are reported explicitly.
+
+```json
+{
+  "query": "bauer 950",
+  "marketplace": "sidelineswap",
+  "category": "110030",
+  "condition": "used",
+  "maxPrice": 500,
+  "limit": 40
+}
+```
+
+Prices and bounds are **USD asking prices**, excluding shipping, fees, and tax. Available listings are searched by default; `showSold:true` also includes sold listings, marked `[Sold]` in search titles. Details recheck the current availability, preserve seller attributes (size, age group, model, etc.), and return original-size photos when provided. These attributes are seller claims, not verification of age, fit, or condition. Shipping availability/costs are not inferred.
+
+Supported filters: price bounds, `new`/`used`/`any` condition, and numeric category IDs. Sorts: relevance, newest, price ascending, price descending. Brand, department, size, color, granular condition, and popularity filters return errors; include descriptive terms in the query and verify the details instead. Location/radius are Facebook-only and do not limit SidelineSwap inventory.
+
+Pagination uses result offsets (0–5000) and returns up to 500 listings, with a maximum of 10 requests and a 45-second overall deadline per call. Incomplete results, later-page failures, skipped malformed rows, and truncated counts are disclosed in the result note; do not treat a bounded search as exhaustive. Offsets follow the storefront order; inventory may change between calls.
+
 ### Choosing Marketplaces
 
 By default all marketplaces are enabled. To limit which are active, set the `MARKETPLACES` env var (comma-separated):
@@ -95,7 +140,7 @@ By default all marketplaces are enabled. To limit which are active, set the `MAR
 }
 ```
 
-Valid values: `facebook`, `ebay`, `depop`, `poshmark`
+Valid values: `facebook`, `ebay`, `depop`, `poshmark`, `sidelineswap`, `playitagain`, `geartrade`
 
 ### eBay API Keys
 
@@ -141,32 +186,33 @@ Search for items across marketplaces.
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
 | `query` | Yes | | Search terms |
-| `marketplace` | No | `facebook` | `facebook`, `ebay`, `depop`, `poshmark`, or `all` |
+| `marketplace` | No | `facebook` | `facebook`, `ebay`, `depop`, `poshmark`, `sidelineswap`, `playitagain`, `geartrade`, or `all` |
 | `location` | No | `san francisco` | City to search in (Facebook only) |
 | `radiusMiles` | No | `25` | Search radius in miles, up to 500 (Facebook only) |
 | `maxPrice` | No | | Maximum price |
 | `minPrice` | No | | Minimum price |
-| `limit` | No | `20` | Max results |
-| `showSold` | No | `false` | Include sold items (Facebook only) |
+| `limit` | No | `20` | Max results: SidelineSwap 500; Play It Again Sports 120; Geartrade 50. All have documented scan/deadline bounds |
+| `offset` | No | `0` | Starting offset: eBay/SidelineSwap storefront rows (SLS max 5000); PIAS matched rows (max 120); Geartrade matching variants (max 47) |
+| `showSold` | No | `false` | Include sold items (Facebook, SidelineSwap); Geartrade includes unavailable variants, not confirmed sale history; PIAS unsupported |
 | `includeImages` | No | `false` | Include image URLs in output |
-| `sort` | No | `relevance` | Sort order (Depop, Poshmark): `relevance`, `newest`, `most_popular`, `price_low_to_high`, `price_high_to_low` |
-| `condition` | No | | Item condition. eBay: `new`, `like_new`, `good`, `fair`. Depop: `new`, `like_new`, `excellent`, `good`, `fair`, `used`. Poshmark: `new` (NWT), `like_new` (NWOT), `good`, `fair` |
-| `category` | No | | Product category. Depop: `tops`, `bottoms`, `dresses`, `coats-jackets`, `footwear`, `accessories`, `bags`, `jewellery`, `activewear`, `swimwear`. Poshmark: `Jackets_&_Coats`, `Dresses`, `Shoes`, `Accessories`, etc. |
-| `brand` | No | | Brand filter (Poshmark only): e.g. `"Nike"`, `"Levi's"`, `"Gucci"` |
+| `sort` | No | `relevance` | Sort order (Depop, Poshmark; SidelineSwap supports all except `most_popular`): `relevance`, `newest`, `most_popular`, `price_low_to_high`, `price_high_to_low` |
+| `condition` | No | | Item condition. eBay: `new`, `like_new`, `good`, `fair`. Depop: `new`, `like_new`, `excellent`, `good`, `fair`, `used`. Poshmark: `new` (NWT), `like_new` (NWOT), `good`, `fair`. SidelineSwap: `new`, `used`, `any` |
+| `category` | No | | Product category. SidelineSwap: numeric category ID (e.g. `110030` for goalie masks). Depop: `tops`, `bottoms`, `dresses`, `coats-jackets`, `footwear`, `accessories`, `bags`, `jewellery`, `activewear`, `swimwear`. Poshmark: `Jackets_&_Coats`, `Dresses`, `Shoes`, `Accessories`, etc. |
+| `brand` | No | | Brand filter (Poshmark, Play It Again Sports, Geartrade): e.g. `"Nike"`, `"Levi's"`, `"Gucci"` |
 | `department` | No | | Department filter (Poshmark only): `Women`, `Men`, `Kids` |
-| `sizes` | No | | Size filter (Depop, Poshmark): e.g. `["S", "M", "L"]` or `["US 9", "US 10"]` |
-| `colors` | No | | Color filter (Depop, Poshmark): `black`, `white`, `red`, `blue`, `green`, `yellow`, `orange`, `pink`, `purple`, `brown`, `grey`, `cream`, `multi`, `silver`, `gold` |
+| `sizes` | No | | Size filter (Depop, Poshmark, Play It Again Sports, Geartrade exact size labels): e.g. `["S", "M", "L"]` or `["US 9", "US 10"]` |
+| `colors` | No | | Color filter (Depop, Poshmark, Play It Again Sports): `black`, `white`, `red`, `blue`, `green`, `yellow`, `orange`, `pink`, `purple`, `brown`, `grey`, `cream`, `multi`, `silver`, `gold` |
 
 **Data returned per marketplace:**
 
-| Field | Facebook | eBay | Depop | Poshmark |
-|-------|----------|------|-------|----------|
-| Title | Yes | Yes | Yes | Yes |
-| Price | Yes | Yes | Yes | Yes |
-| Location | City | City, State | — | — |
-| Condition | — | Yes | — | — |
-| Photo count | 1 thumbnail | 1 thumbnail | 1 thumbnail | 1 thumbnail |
-| Seller | Yes | Yes | — | — |
+| Field | Facebook | eBay | Depop | Poshmark | Play It Again Sports |
+|-------|----------|------|-------|----------|----------------------|
+| Title | Yes | Yes | Yes | Yes | Yes |
+| Price | Yes | Yes | Yes | Yes | USD/CAD; starting price if options |
+| Location | City | City, State | — | — | Store name/location |
+| Condition | — | Yes | — | — | When listed |
+| Photo count | 1 thumbnail | 1 thumbnail | 1 thumbnail | 1 thumbnail | Full gallery |
+| Seller | Yes | Yes | — | — | Store |
 
 ### `get_listing_details`
 
@@ -175,18 +221,18 @@ Get full details for a specific listing using an ID from search results.
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
 | `listingId` | Yes | | Listing ID from search results |
-| `marketplace` | No | `facebook` | `facebook`, `ebay`, `depop`, or `poshmark` |
+| `marketplace` | No | `facebook` | `facebook`, `ebay`, `depop`, `poshmark`, or `sidelineswap`, `playitagain`, `geartrade` |
 
 **Data returned per marketplace:**
 
-| Field | Facebook | eBay | Depop | Poshmark |
-|-------|----------|------|-------|----------|
-| Description | Yes | Yes | Yes | Yes |
-| All photos | Yes | Yes | Yes | Yes |
-| Location | City | City, State, Country | — | — |
-| Seller | Name | Username | Username | Username |
-| Delivery types | Yes | — | — | — |
-| Shipping | Yes/No | Service codes | Yes/No | Always included |
+| Field | Facebook | eBay | Depop | Poshmark | Play It Again Sports |
+|-------|----------|------|-------|----------|----------------------|
+| Description | Yes | Yes | Yes | Yes | When listed; custom fields/SKU/current price |
+| All photos | Yes | Yes | Yes | Yes | When listed |
+| Location | City | City, State, Country | — | — | Store name/location |
+| Seller | Name | Username | Username | Username | Store |
+| Delivery types | Yes | — | — | — | Explicit store fulfillment options |
+| Shipping | Yes/No | Service codes | Yes/No | Always included | When explicitly listed |
 
 ### `list_marketplaces`
 
@@ -209,7 +255,15 @@ Useful for research-style clients that expect these standard tool names; for fil
 
 **Depop** — Uses a headless browser to search listings with support for category, condition, size, and color filters. The browser instance is shared across requests.
 
+**Play It Again Sports** — Reads public server-rendered storefront data and product JSON-LD over HTTP. Reports bounded search coverage and store-native currency; details recheck stock, current price and explicit fulfillment options. See the source-specific limits above.
+
 **Poshmark** — Uses a headless browser to search listings with support for condition, size, color, sort, and price filters. Poshmark is not location-based — all items ship nationally.
+
+**Geartrade** — Reads public, paginated Shopify search pages and enriches candidates with product JSON. No login, API key, or browser required. The storefront currency is checked as USD on both searches and detail pages. Each call scans at most three search pages/48 products, with at most three concurrent product requests and a 45-second deadline. Relevance searches stop earlier when enough matching variants are found; price sorts scan the full bounded window before sorting and slicing. The returned coverage note is significant: results are bounded, not exhaustive, and `totalFound` is intentionally omitted.
+
+Geartrade supports keyword search, USD asking-price bounds, exact storefront brand, product type (`category`), size labels, and conditions `new`, `good`, `excellent`, `fair`, `used`, or `any`. `used` includes Good/Excellent/Fair only; Sample and UnNew With Tags are not assumed used. Brand, category, size, stock, condition, and price are rechecked against product data. Supported sorts are `relevance`, `price_low_to_high`, and `price_high_to_low` (prices sorted within the fetched candidates). `limit` is 0–50; `offset` is 0–47 and skips matching variants within the same bounded scan, so large offsets can exhaust its budget. Location/radius are not applied; unsupported department/color filters and sort/condition values return explicit errors.
+
+Each result identifies one variant as `product-handle:variantId`; details accept that ID or a bare product handle. Default searches exclude unavailable variants. `showSold` includes unavailable variants that the storefront search actually returns; unavailability does not prove a completed sale, and historical sold inventory is not guaranteed. Descriptions include the current variant price and stock state. The source shipping requirement is shown in details; delivery availability and costs must be checked on the site. Prices exclude shipping and tax; Shopify's `vendor` is not exposed as a seller. Geartrade contains both new and used outdoor equipment, and its keyword search may return loosely related items (for example, `goalie` can match clothing with “Goals” in its name). Inspect relevance and do not assume it has hockey or baseball inventory.
 
 ## Development
 
@@ -232,6 +286,7 @@ npm run build
 - **eBay**: Requires developer API keys (free tier available)
 - **Depop**: Requires Chrome/Chromium installed; slower than Facebook/eBay (~5s per search)
 - **Poshmark**: Requires Chrome/Chromium installed; no official API so relies on page scraping
+- **SidelineSwap**: Undocumented public storefront endpoints; bounded pagination, USD asking prices, no manufacture-date inference.
 - **Rate limiting**: Don't make too many requests too quickly
 
 ## License
